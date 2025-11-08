@@ -1,0 +1,6 @@
+@RedditSentimentTrader.Api_HostAddress = http://localhost:5265
+
+GET {{RedditSentimentTrader.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
