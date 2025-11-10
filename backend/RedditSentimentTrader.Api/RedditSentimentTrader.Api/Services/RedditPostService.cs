@@ -1,27 +1,30 @@
-﻿using System.Collections.Generic;
-using System.Threading.Tasks;
-using RedditSentimentTrader.Api.Data;
+﻿using RedditSentimentTrader.Api.Data;
 using RedditSentimentTrader.Api.Repositories;
 
 namespace RedditSentimentTrader.Api.Services
 {
     public class RedditPostService : IRedditPostService
     {
-        private readonly IRedditPostRepository _repository;
+        private readonly IRedditPostRepository _repo;
 
-        public RedditPostService(IRedditPostRepository repository)
+        public RedditPostService(IRedditPostRepository repo)
         {
-            _repository = repository;
+            _repo = repo;
         }
 
-        public async Task<List<RedditPost>> GetAllAsync()
-        {
-            return await _repository.GetAllAsync();
-        }
+        public Task<IEnumerable<RedditPost>> GetAllAsync() =>
+            _repo.GetAllAsync();
 
-        public async Task<RedditPost> CreateAsync(RedditPost post)
-        {
-            return await _repository.AddAsync(post);
-        }
+        public Task<RedditPost?> GetByIdAsync(int id) =>
+            _repo.GetByIdAsync(id);
+
+        public Task<RedditPost> CreateAsync(RedditPost post) =>
+            _repo.CreateAsync(post);
+
+        public Task<RedditPost?> UpdateAsync(RedditPost post) =>
+            _repo.UpdateAsync(post);
+
+        public Task<bool> DeleteAsync(int id) =>
+            _repo.DeleteAsync(id);
     }
 }

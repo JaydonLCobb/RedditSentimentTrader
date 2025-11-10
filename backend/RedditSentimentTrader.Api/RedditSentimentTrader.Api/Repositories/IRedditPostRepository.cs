@@ -1,12 +1,13 @@
-﻿using System.Collections.Generic;
-using System.Threading.Tasks;
-using RedditSentimentTrader.Api.Data;
+﻿using RedditSentimentTrader.Api.Data;
 
 namespace RedditSentimentTrader.Api.Repositories
 {
     public interface IRedditPostRepository
     {
-        Task<List<RedditPost>> GetAllAsync();
-        Task<RedditPost> AddAsync(RedditPost post);
+        Task<IEnumerable<RedditPost>> GetAllAsync();
+        Task<RedditPost?> GetByIdAsync(int id);
+        Task<RedditPost> CreateAsync(RedditPost post);
+        Task<RedditPost?> UpdateAsync(RedditPost post);
+        Task<bool> DeleteAsync(int id);
     }
 }

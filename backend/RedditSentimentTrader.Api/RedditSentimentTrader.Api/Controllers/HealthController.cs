@@ -12,7 +12,7 @@ namespace RedditSentimentTrader.Api.Controllers
             return Ok(new
             {
                 status = "OK",
-                message = "RedditSentimentTrader API is running",
+                message = "running",
                 time = DateTime.UtcNow
             });
         }
