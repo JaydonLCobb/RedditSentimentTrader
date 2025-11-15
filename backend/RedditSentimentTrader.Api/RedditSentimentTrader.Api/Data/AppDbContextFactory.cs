@@ -9,8 +9,7 @@ namespace RedditSentimentTrader.Api.Data
         {
             var optionsBuilder = new DbContextOptionsBuilder<AppDbContext>();
 
-            // Use your LOCAL database for generating migrations
-            optionsBuilder.UseSqlServer(
+                        optionsBuilder.UseSqlServer(
                 "Server=localhost;Database=RedditSentimentTraderDb;User Id=sa;Password=qpWdvrxmeortk$6;TrustServerCertificate=True;"
             );
 

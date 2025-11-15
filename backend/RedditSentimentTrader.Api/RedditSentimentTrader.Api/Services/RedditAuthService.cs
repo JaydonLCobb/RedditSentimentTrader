@@ -109,7 +109,7 @@ namespace RedditSentimentTrader.Api.Services
 
             if (existing == null)
             {
-                // First time: insert new row (Id auto-generated)
+                // First time: insert new row
                 _db.RedditTokens.Add(incoming);
             }
             else

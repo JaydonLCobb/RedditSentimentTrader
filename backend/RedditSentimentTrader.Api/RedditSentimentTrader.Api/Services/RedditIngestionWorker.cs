@@ -41,7 +41,7 @@ public class RedditIngestionWorker : BackgroundService
 
         using var scope = _services.CreateScope();
 
-        // Get scoped services here safely
+      
         var auth = scope.ServiceProvider.GetRequiredService<IRedditAuthService>();
         var postService = scope.ServiceProvider.GetRequiredService<IRedditPostService>();
 
