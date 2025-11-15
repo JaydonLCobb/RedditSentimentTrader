@@ -8,6 +8,9 @@ namespace RedditSentimentTrader.Api.Data
             : base(options) { }
 
         public DbSet<RedditPost> RedditPosts { get; set; }
+
+        public DbSet<RedditTokenStore> RedditTokens { get; set; }
+
     }
 }
 

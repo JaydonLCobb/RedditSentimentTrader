@@ -1,105 +1,64 @@
-﻿using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
-using System.Net.Http.Json;
-using RedditSentimentTrader.Api.Data;
-using RedditSentimentTrader.Api.Services;
-using RedditSentimentTrader.Api.Repositories;
-using Microsoft.Extensions.DependencyInjection;
+﻿using RedditSentimentTrader.Api.Services;
 
-namespace RedditSentimentTrader.Api.Services
+public class RedditIngestionWorker : BackgroundService
 {
-    public class RedditIngestionWorker : BackgroundService
+    private readonly ILogger<RedditIngestionWorker> _logger;
+    private readonly IServiceProvider _services;
+    private readonly IHttpClientFactory _httpFactory;
+
+    public RedditIngestionWorker(
+        ILogger<RedditIngestionWorker> logger,
+        IServiceProvider services,
+        IHttpClientFactory httpFactory)
     {
-        private readonly ILogger<RedditIngestionWorker> _logger;
-        private readonly IServiceProvider _services;
-        private readonly HttpClient _http = new HttpClient();
+        _logger = logger;
+        _services = services;
+        _httpFactory = httpFactory;
+    }
 
-        public RedditIngestionWorker(ILogger<RedditIngestionWorker> logger, IServiceProvider services)
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        _logger.LogInformation("Reddit worker started.");
+
+        while (!stoppingToken.IsCancellationRequested)
         {
-            _logger = logger;
-            _services = services;
-        }
-
-        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-        {
-            _logger.LogInformation("worker started");
-
-            while (!stoppingToken.IsCancellationRequested)
-            {
-                try
-                {
-                    await FetchAndStorePosts();
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Error inside Reddit ingestion");
-                }
-
-                await Task.Delay(TimeSpan.FromMinutes(2), stoppingToken);
-            }
-        }
-
-        private async Task FetchAndStorePosts()
-        {
-            _logger.LogInformation("getting Reddit posts");
-
-            string url =
-                "https://api.pullpush.io/reddit/search/comment/?subreddit=wallstreetbets&size=5";
-
-            PushshiftResponse? result = null;
-
             try
             {
-                result = await _http.GetFromJsonAsync<PushshiftResponse>(url);
+                await FetchAndStorePosts(stoppingToken);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "deserialize error");
-                return;
+                _logger.LogError(ex, "Error in ingestion loop");
             }
 
-            if (result?.data == null || result.data.Count == 0)
-            {
-                _logger.LogWarning("returned no data");
-                return;
-            }
-
-            using var scope = _services.CreateScope();
-            var service = scope.ServiceProvider.GetRequiredService<IRedditPostService>();
-
-            int savedCount = 0;
-
-            foreach (var c in result.data)
-            {
-                if (string.IsNullOrWhiteSpace(c.body))
-                    continue;
-
-                var post = new RedditPost
-                {
-                    Ticker = "SPY", 
-                    Author = c.author ?? "unknown",
-                    Content = c.body,
-                    SentimentScore = 0.0,  
-                    CreatedUtc = DateTimeOffset.FromUnixTimeSeconds((long)Math.Floor(c.created_utc)).UtcDateTime
-                };
-
-                await service.CreateAsync(post);
-                savedCount++;
-            }
-
-            _logger.LogInformation($"svd {savedCount} posts to db");
+            await Task.Delay(TimeSpan.FromMinutes(2), stoppingToken);
         }
     }
 
-    public class PushshiftResponse
+    private async Task FetchAndStorePosts(CancellationToken token)
     {
-        public List<PushshiftComment> data { get; set; } = new();
-    }
+        _logger.LogInformation("Fetching Reddit posts...");
 
-    public class PushshiftComment
-    {
-        public string body { get; set; }
-        public string author { get; set; }
-        public double created_utc { get; set; }
+        using var scope = _services.CreateScope();
+
+        // Get scoped services here safely
+        var auth = scope.ServiceProvider.GetRequiredService<IRedditAuthService>();
+        var postService = scope.ServiceProvider.GetRequiredService<IRedditPostService>();
+
+        var accessToken = await auth.GetValidAccessTokenAsync();
+
+        var http = _httpFactory.CreateClient("RedditAPI");
+        http.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("bearer", accessToken);
+
+        var url = "https://oauth.reddit.com/r/stocks/comments?limit=5";
+        var res = await http.GetAsync(url, token);
+        res.EnsureSuccessStatusCode();
+
+        using var stream = await res.Content.ReadAsStreamAsync(token);
+        using var json = await System.Text.Json.JsonDocument.ParseAsync(stream, cancellationToken: token);
+
+        // TODO: map → save to DB using postService
+        _logger.LogInformation("Fetched posts from Reddit API.");
     }
 }

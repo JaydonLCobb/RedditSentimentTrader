@@ -18,7 +18,7 @@ namespace RedditSentimentTrader.Api.Data
         public string Author { get; set; } = string.Empty;
 
         [Required]
-        [StringLength(500)]
+        [StringLength(4000)]
         public string Content { get; set; } = string.Empty;
 
         [Range(-1.0, 1.0)]
