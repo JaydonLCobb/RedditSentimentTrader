@@ -1,41 +1,60 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using RedditSentimentTrader.Api.Services;
 
-namespace RedditSentimentTrader.Api.Controllers
+[ApiController]
+[Route("reddit/wsb")]
+public class WsbController : ControllerBase
 {
-    [ApiController]
-    [Route("reddit/wsb")]
-    public class WsbController : ControllerBase
+    private readonly IRedditDailyThreadService _ingest;
+    private readonly WsbLocator _locator;
+
+    public WsbController(
+        IRedditDailyThreadService ingest,
+        WsbLocator locator)
     {
-        private readonly IWsbDailyService _daily;
-        private readonly IRedditApiService _reddit;
+        _ingest = ingest;
+        _locator = locator;
+    }
 
-        public WsbController(IWsbDailyService daily, IRedditApiService reddit)
+    [HttpGet("today")]
+    public async Task<IActionResult> Today()
+    {
+        string threadUrl = await _locator.FindDailyThreadAsync();
+
+        int imported = await _ingest.IngestThreadAsync(threadUrl);
+
+        return Ok(new
         {
-            _daily = daily;
-            _reddit = reddit;
-        }
+            thread = threadUrl,
+            commentsImported = imported
+        });
+    }
 
-        // /reddit/wsb/today
-        [HttpGet("today")]
-        public async Task<IActionResult> Today()
+    [HttpGet("weekend")]
+    public async Task<IActionResult> Weekend()
+    {
+        string threadUrl = await _locator.FindWeekendThreadAsync();
+
+        int imported = await _ingest.IngestThreadAsync(threadUrl);
+
+        return Ok(new
         {
-            var post = await _daily.FindTodayDiscussionThreadAsync();
-            if (post is null)
-                return NotFound("No daily discussion thread found today.");
+            thread = threadUrl,
+            commentsImported = imported
+        });
+    }
 
-            return Ok(post);
-        }
+    [HttpGet("moves-tomorrow")]
+    public async Task<IActionResult> MovesTomorrow()
+    {
+        string threadUrl = await _locator.FindMovesTomorrowThreadAsync();
 
-        //  /reddit/wsb/weekend
-        [HttpGet("weekend")]
-        public async Task<IActionResult> Weekend()
+        int imported = await _ingest.IngestThreadAsync(threadUrl);
+
+        return Ok(new
         {
-            var post = await _daily.FindWeekendThreadAsync();
-            if (post is null)
-                return NotFound("No weekend discussion thread found.");
-
-            return Ok(post);
-        }
+            thread = threadUrl,
+            commentsImported = imported
+        });
     }
 }

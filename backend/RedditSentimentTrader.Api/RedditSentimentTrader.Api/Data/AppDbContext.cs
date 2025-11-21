@@ -6,10 +6,9 @@ namespace RedditSentimentTrader.Api.Data
     {
         public AppDbContext(DbContextOptions<AppDbContext> options)
             : base(options) { }
-
         public DbSet<RedditPost> RedditPosts { get; set; }
-
         public DbSet<RedditTokenStore> RedditTokens { get; set; }
+        public DbSet<RedditComment> RedditComments => Set<RedditComment>();
 
     }
 }
