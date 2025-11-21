@@ -26,6 +26,9 @@ builder.Services.AddScoped<IRedditAuthService, RedditAuthService>();
 builder.Services.AddScoped<IRedditApiService, RedditApiService>();
 builder.Services.AddScoped<IWsbDailyService, WsbDailyService>();
 builder.Services.AddHostedService<RedditIngestionWorker>();
+builder.Services.AddScoped<IRedditDailyThreadService, RedditDailyThreadService>();
+builder.Services.AddScoped<WsbLocator>();
+
 
 builder.Services.Configure<RedditOptions>(builder.Configuration.GetSection("Reddit"));
 
