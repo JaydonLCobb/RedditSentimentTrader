@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using OpenAI.Chat;
 using RedditSentimentTrader.Api.Data;
 using RedditSentimentTrader.Api.Options;
 using RedditSentimentTrader.Api.Repositories;
@@ -39,6 +40,20 @@ builder.Services.AddHttpClient("RedditAPI", c =>
     );
 });
 
+builder.Services.AddSingleton<ChatClient>(sp =>
+{
+    var cfg = builder.Configuration;
+    var apiKey =
+        cfg["OpenAI:ApiKey"]
+        ?? Environment.GetEnvironmentVariable("OPENAI_API_KEY")
+        ?? throw new InvalidOperationException("OpenAI API key no good");
+
+    var model = cfg["OpenAI:Model"] ?? "gpt-4o-mini";
+
+    return new ChatClient(model: model, apiKey: apiKey);
+});
+
+builder.Services.AddScoped<ISentimentService, OpenAiSentimentService>();
 var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())
