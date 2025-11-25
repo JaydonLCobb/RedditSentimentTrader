@@ -4,23 +4,28 @@ using Microsoft.EntityFrameworkCore;
 
 namespace RedditSentimentTrader.Api.Services
 {
-
     public interface IRedditDailyThreadService
     {
         Task<int> IngestThreadAsync(string threadUrl);
     }
-   
-public class RedditDailyThreadService : IRedditDailyThreadService
+
+    public class RedditDailyThreadService : IRedditDailyThreadService
     {
         private readonly AppDbContext _db;
         private readonly IHttpClientFactory _clientFactory;
         private readonly IRedditAuthService _auth;
+        private readonly ISentimentService _sentiment;
 
-        public RedditDailyThreadService(AppDbContext db, IHttpClientFactory clientFactory, IRedditAuthService auth)
+        public RedditDailyThreadService(
+            AppDbContext db,
+            IHttpClientFactory clientFactory,
+            IRedditAuthService auth,
+            ISentimentService sentiment)
         {
             _db = db;
             _clientFactory = clientFactory;
             _auth = auth;
+            _sentiment = sentiment;
         }
 
         public async Task<int> IngestThreadAsync(string threadUrl)
@@ -28,7 +33,6 @@ public class RedditDailyThreadService : IRedditDailyThreadService
             if (string.IsNullOrWhiteSpace(threadUrl))
                 throw new ArgumentException("threadUrl is required", nameof(threadUrl));
 
-            // https://www.reddit.com/r/wallstreetbets/comments/1p1jm4l/what_are_your_moves_tomorrow_november_20_2025/
             var uri = new Uri(threadUrl);
             var segments = uri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
 
@@ -52,7 +56,6 @@ public class RedditDailyThreadService : IRedditDailyThreadService
             var json = await res.Content.ReadAsStringAsync();
             using var doc = JsonDocument.Parse(json);
 
-            // [0] = post, [1] = comments
             var commentsArr = doc.RootElement[1].GetProperty("data")
                                               .GetProperty("children");
 
@@ -64,7 +67,15 @@ public class RedditDailyThreadService : IRedditDailyThreadService
             {
                 bool exists = await _db.RedditComments.AnyAsync(x => x.RedditId == c.RedditId);
                 if (!exists)
+                {
+                    var sentiment = await _sentiment.ScoreAsync(c.Body);
+
+                    c.SentimentLabel = sentiment.Label;
+                    c.SentimentScore = sentiment.Score;
+                    c.Confidence = sentiment.Confidence;
+
                     _db.RedditComments.Add(c);
+                }
             }
 
             await _db.SaveChangesAsync();
@@ -105,7 +116,9 @@ public class RedditDailyThreadService : IRedditDailyThreadService
                 RedditId = data.GetProperty("id").GetString() ?? "",
                 Author = data.GetProperty("author").GetString() ?? "",
                 Body = data.GetProperty("body").GetString() ?? "",
-                CreatedUtc = DateTimeOffset.FromUnixTimeSeconds(createdUnix).UtcDateTime,
+                CreatedUtc = createdUnix > 0
+                    ? DateTimeOffset.FromUnixTimeSeconds(createdUnix).UtcDateTime
+                    : DateTime.UtcNow,
                 ThreadUrl = threadUrl
             });
 
@@ -118,8 +131,5 @@ public class RedditDailyThreadService : IRedditDailyThreadService
                     Flatten(r, output, threadUrl);
             }
         }
-
     }
-
-
 }

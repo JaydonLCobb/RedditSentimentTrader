@@ -43,6 +43,18 @@ namespace RedditSentimentTrader.Api.Controllers
             await _authService.BootstrapWithAuthCodeAsync(code, state);
             return Ok(new { status = "authorized" });
         }
+
+        [HttpGet("debug-config")]
+        public object DebugConfig([FromServices] IConfiguration config)
+        {
+            return new
+            {
+                environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"),
+                conn = config.GetConnectionString("DefaultConnection"),
+                clientId = config["Reddit:ClientId"],
+                vault = config["KeyVaultUri"]
+            };
+        }
     }
 }
 
