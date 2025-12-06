@@ -95,7 +95,6 @@ namespace RedditSentimentTrader.Api.Services
 
             if (string.IsNullOrWhiteSpace(rawJson))
             {
-                // Fallback: treat as not market-related
                 return new TickerExtractionResult(false, null, new List<string>());
             }
 
@@ -112,11 +111,9 @@ namespace RedditSentimentTrader.Api.Services
             }
             catch (JsonException)
             {
-                // If the model ever sends invalid JSON, don't blow up ingestion
                 return new TickerExtractionResult(false, null, new List<string>());
             }
 
-            // Normalize tickers (strip $, upper, map common names)
             string? primary = NormalizeTicker(dto.PrimaryTicker);
 
             var all = dto.Tickers
@@ -125,8 +122,6 @@ namespace RedditSentimentTrader.Api.Services
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList()!;
 
-            // If the model says it's market related but gave no usable tickers,
-            // we can choose to downgrade it to false.
             bool isMarketRelated = dto.IsMarketRelated && (primary is not null || all.Count > 0);
 
             return new TickerExtractionResult(isMarketRelated, primary, all);
@@ -138,13 +133,11 @@ namespace RedditSentimentTrader.Api.Services
 
             var t = raw.Trim();
 
-            // strip leading $ / # etc
             if (t.StartsWith("$") || t.StartsWith("#"))
                 t = t[1..];
 
             t = t.Trim().ToUpperInvariant();
 
-            // map common names -> tickers
             return t switch
             {
                 "NVIDIA" => "NVDA",
@@ -159,7 +152,7 @@ namespace RedditSentimentTrader.Api.Services
                 "TESLA" => "TSLA",
                 "APPLE" => "AAPL",
 
-                _ => t // fallback: assume it's already a ticker
+                _ => t 
             };
         }
     }
