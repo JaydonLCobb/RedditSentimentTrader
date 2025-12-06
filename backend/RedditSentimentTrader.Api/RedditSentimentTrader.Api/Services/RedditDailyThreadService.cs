@@ -1,6 +1,6 @@
-﻿using RedditSentimentTrader.Api.Data;
-using System.Text.Json;
+﻿using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using RedditSentimentTrader.Api.Data;
 
 namespace RedditSentimentTrader.Api.Services
 {
@@ -15,17 +15,20 @@ namespace RedditSentimentTrader.Api.Services
         private readonly IHttpClientFactory _clientFactory;
         private readonly IRedditAuthService _auth;
         private readonly ISentimentService _sentiment;
+        private readonly ITickerExtractionService _tickerExtraction;
 
         public RedditDailyThreadService(
             AppDbContext db,
             IHttpClientFactory clientFactory,
             IRedditAuthService auth,
-            ISentimentService sentiment)
+            ISentimentService sentiment,
+            ITickerExtractionService tickerExtraction)
         {
             _db = db;
             _clientFactory = clientFactory;
             _auth = auth;
             _sentiment = sentiment;
+            _tickerExtraction = tickerExtraction;
         }
 
         public async Task<int> IngestThreadAsync(string threadUrl)
@@ -33,6 +36,7 @@ namespace RedditSentimentTrader.Api.Services
             if (string.IsNullOrWhiteSpace(threadUrl))
                 throw new ArgumentException("threadUrl is required", nameof(threadUrl));
 
+            // e.g. https://www.reddit.com/r/wallstreetbets/comments/1p1jm4l/what_are_your_moves_tomorrow_november_20_2025/
             var uri = new Uri(threadUrl);
             var segments = uri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
 
@@ -42,7 +46,8 @@ namespace RedditSentimentTrader.Api.Services
 
             var threadId = segments[commentsIndex + 1];
 
-            var apiUrl = $"https://oauth.reddit.com/comments/{threadId}.json?depth=10&limit=500&raw_json=1";
+            var apiUrl =
+                $"https://oauth.reddit.com/comments/{threadId}.json?depth=10&limit=250&raw_json=1";
 
             var token = await _auth.GetValidAccessTokenAsync();
 
@@ -56,29 +61,68 @@ namespace RedditSentimentTrader.Api.Services
             var json = await res.Content.ReadAsStringAsync();
             using var doc = JsonDocument.Parse(json);
 
-            var commentsArr = doc.RootElement[1].GetProperty("data")
-                                              .GetProperty("children");
+            // [0] = post, [1] = comments
+            var commentsArr = doc.RootElement[1]
+                                 .GetProperty("data")
+                                 .GetProperty("children");
 
             var flat = new List<RedditComment>();
             foreach (var child in commentsArr.EnumerateArray())
                 Flatten(child, flat, threadUrl);
 
+            var total = flat.Count;
+            var skippedExists = 0;
+            var skippedShort = 0;
+            var skippedNoTicker = 0;
+            var added = 0;
+
+
             foreach (var c in flat)
             {
-                bool exists = await _db.RedditComments.AnyAsync(x => x.RedditId == c.RedditId);
-                if (!exists)
+                bool exists = await _db.RedditComments
+                    .AnyAsync(x => x.RedditId == c.RedditId);
+
+                if (exists)
                 {
-                    var sentiment = await _sentiment.ScoreAsync(c.Body);
-
-                    c.SentimentLabel = sentiment.Label;
-                    c.SentimentScore = sentiment.Score;
-                    c.Confidence = sentiment.Confidence;
-
-                    _db.RedditComments.Add(c);
+                    skippedExists++;
+                    continue;
                 }
-            }
 
+                if (string.IsNullOrWhiteSpace(c.Body) || c.Body.Length < 5)
+                {
+                    skippedShort++;
+                    continue;
+                }
+
+                var extraction = await _tickerExtraction.ExtractAsync(c.Body);
+
+                if (!extraction.IsMarketRelated ||
+                    string.IsNullOrWhiteSpace(extraction.PrimaryTicker))
+                {
+                    skippedNoTicker++;
+                    continue;
+                }
+
+                c.IsMarketRelated = true;
+                c.PrimaryTicker = extraction.PrimaryTicker;
+                // c.RawTickers = string.Join(",", extraction.Tickers);
+
+                var bodyForModel =
+                    c.Body.Length > 1000 ? c.Body[..1000] : c.Body;
+
+                var sentiment = await _sentiment.ScoreAsync(bodyForModel);
+
+                c.SentimentLabel = sentiment.Label;
+                c.SentimentScore = sentiment.Score;
+                c.Confidence = sentiment.Confidence;
+
+                _db.RedditComments.Add(c);
+                added++;
+            }
             await _db.SaveChangesAsync();
+
+            //_logger.LogInformation("IngestThreadAsync: total={Total}, added={Added}, exists={Exists}, short={Short}, noTicker={NoTicker}",total, added, skippedExists, skippedShort, skippedNoTicker);
+            Console.WriteLine(added);
             return flat.Count;
         }
 
@@ -96,9 +140,11 @@ namespace RedditSentimentTrader.Api.Services
                 switch (createdProp.ValueKind)
                 {
                     case JsonValueKind.Number:
-                        createdUnix = createdProp.TryGetInt64(out var i64)
-                            ? i64
-                            : (long)createdProp.GetDouble();
+                        if (!createdProp.TryGetInt64(out createdUnix))
+                        {
+                            var dbl = createdProp.GetDouble();
+                            createdUnix = (long)dbl;
+                        }
                         break;
 
                     case JsonValueKind.String:
@@ -111,14 +157,15 @@ namespace RedditSentimentTrader.Api.Services
                 }
             }
 
+            if (createdUnix == 0)
+                createdUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
             output.Add(new RedditComment
             {
                 RedditId = data.GetProperty("id").GetString() ?? "",
                 Author = data.GetProperty("author").GetString() ?? "",
                 Body = data.GetProperty("body").GetString() ?? "",
-                CreatedUtc = createdUnix > 0
-                    ? DateTimeOffset.FromUnixTimeSeconds(createdUnix).UtcDateTime
-                    : DateTime.UtcNow,
+                CreatedUtc = DateTimeOffset.FromUnixTimeSeconds(createdUnix).UtcDateTime,
                 ThreadUrl = threadUrl
             });
 

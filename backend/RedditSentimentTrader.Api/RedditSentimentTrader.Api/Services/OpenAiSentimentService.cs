@@ -28,8 +28,15 @@ namespace RedditSentimentTrader.Api.Services
             var messages = new List<ChatMessage>
             {
                 new SystemChatMessage(
-                    "You are a financial sentiment analyzer for stock market discussion. " +
-                    "Classify comments as bullish / bearish / neutral and give a numeric score."
+                    "You are a financial sentiment analyzer for Jane Street/Two Sigma/Etc, examining r/wallstreetbets.\n" +
+                    "Your job is to classify EACH COMMENT'S overall sentiment toward the stock market " +
+                    "or specific tickers as bullish, bearish, neutral, or other.\n" +
+                    "- Bullish: expecting price to go up, positive outlook, calls, buying, optimism.\n" +
+                    "- Bearish: expecting price to go down, puts, shorting, selling, pessimism.\n" +
+                    "- Neutral: no clear directional view or just discussion without a bet.\n" +
+                    "- Other: off-topic, politics, memes, or content not about markets.\n" +
+                    "Sarcasm and jokes are common — try to infer the *real* sentiment when possible.\n" +
+                    "Return only JSON with fields: label, score, confidence."
                 ),
                 new UserChatMessage(
                     $"Comment: \"{text}\"\n\n" +

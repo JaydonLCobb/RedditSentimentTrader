@@ -29,6 +29,7 @@ builder.Services.AddScoped<IWsbDailyService, WsbDailyService>();
 builder.Services.AddHostedService<RedditIngestionWorker>();
 builder.Services.AddScoped<IRedditDailyThreadService, RedditDailyThreadService>();
 builder.Services.AddScoped<WsbLocator>();
+builder.Services.AddScoped<ITickerExtractionService, OpenAiTickerExtractionService>();
 
 
 builder.Services.Configure<RedditOptions>(builder.Configuration.GetSection("Reddit"));

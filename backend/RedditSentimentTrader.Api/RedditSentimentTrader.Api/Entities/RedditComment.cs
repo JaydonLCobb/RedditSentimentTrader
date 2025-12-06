@@ -9,5 +9,7 @@
     public string? SentimentLabel { get; set; }
     public double? SentimentScore { get; set; }
     public double? Confidence { get; set; }
+    public bool IsMarketRelated { get; set; }      
+    public string? PrimaryTicker { get; set; }    
 }
 
